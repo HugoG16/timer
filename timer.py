@@ -3,6 +3,9 @@ import PySimpleGUI as sg ## https://www.pysimplegui.org/en/latest/call%20referen
 from datetime import date, timedelta
 import time
 
+# bla bla bla so para ver uma coisa
+
+
 ## tables:          logs, tarefas
 ## logs:            CREATE TABLE logs(id integer primary key autoincrement, dia integer, mes integer, ano integer, inicio real, duracao real, tarefa text);
 ## tarefas:         CREATE TABLE tarefas(id integer primary key autoincrement, nome text, descricao text, tags text);
