@@ -1,5 +1,6 @@
 import sqlite3 ## https://docs.python.org/3/library/sqlite3.html
 import PySimpleGUI as sg ## https://www.pysimplegui.org/en/latest/call%20reference
+from psgtray import SystemTray
 from datetime import date, timedelta
 import time
 
@@ -12,6 +13,11 @@ LOGO = "logo.ico"
 EMOJI_RUNNING = '▶️'
 EMOJI_PAUSE = '⏸️'
 
+def create_tray_icon(window):
+    menu = ['', ['Mostrar janela', 'Esconder Janela', "Sair"]]
+    return SystemTray(menu, single_click_events=False, window=window, tooltip='timer', icon=LOGO)
+
+
 def create_menu_layout():
     return [ ['Tarefas',['Ver tarefas', '!Editar tarefas', 'Adicionar tarefa']], 
             ['Registos', ['Ver registros', '!Editar registos']] ]
@@ -23,7 +29,8 @@ def create_layout(tarefas:list):
 
     l2 = [sg.P(), sg.Combo(values=tarefas, enable_events=True, readonly=True, k='tarefa'), sg.P()]
 
-    l3 = [sg.P(), sg.pin(sg.B('Começar', k='comecar')), sg.pin(sg.B('Terminar', k='parar')), sg.pin(sg.B('Pausar', k='pausar')), sg.P()]
+    l3 = [sg.P(), sg.pin(sg.B('Começar', k='comecar', disabled=True)), sg.pin(sg.B('Terminar', k='parar', visible=False)), 
+          sg.pin(sg.B('Pausar', k='pausar', visible=False)), sg.P()]
 
     return [menu, [sg.VPush()], l1, l2, l3, [sg.VPush()]]
 
@@ -86,16 +93,16 @@ def main():
 
     ## create window
     layout = create_layout(tarefas)
-    window = sg.Window('Timer', layout, icon=LOGO, finalize=True, resizable=True)
+    window = sg.Window('Timer', layout, icon=LOGO, finalize=True, resizable=True, enable_close_attempted_event=True)
     window.set_min_size((250,100))
-   
+    window.refresh()
+    
     # window.bind('<FocusIn>', 'focus_in')
     # window.bind('<FocusOut>', 'focus_out')
 
-    window.Element('parar').Update(visible=False)
-    window.Element('pausar').Update(visible=False)
-    window.Element('comecar').Update(disabled=True)
-
+    ## create tray icon
+    tray = create_tray_icon(window)
+    
     ## main loop
     is_counting = False
 
@@ -103,12 +110,24 @@ def main():
     inicio : float = 0
     ultimo : float = time.time()
     tarefa : str = ''
-
+    
     while True:
         event, values = window.read(timeout=100, timeout_key='refresh')
+
+        if event in tray.key:
+            event = values[event]
+
         match event:
-            case sg.WIN_CLOSED:
+            case 'Sair':
                 break
+
+            case 'Mostrar janela' | sg.EVENT_SYSTEM_TRAY_ICON_DOUBLE_CLICKED:
+                window.un_hide()
+                window.bring_to_front()
+
+            case 'Esconder Janela' | sg.WIN_CLOSE_ATTEMPTED_EVENT:
+                window.hide()
+                tray.show_icon()
             
             case 'refresh':
                 if not is_counting:
@@ -183,6 +202,6 @@ def main():
             case 'Ver registros':
                 ver_registros(cur)
                 
-
+    tray.close()
     window.close()
     exit(0)
