@@ -3,9 +3,6 @@ import PySimpleGUI as sg ## https://www.pysimplegui.org/en/latest/call%20referen
 from datetime import date, timedelta
 import time
 
-# bla bla bla so para ver uma coisa
-
-
 ## tables:          logs, tarefas
 ## logs:            CREATE TABLE logs(id integer primary key autoincrement, dia integer, mes integer, ano integer, inicio real, duracao real, tarefa text);
 ## tarefas:         CREATE TABLE tarefas(id integer primary key autoincrement, nome text, descricao text, tags text);
@@ -102,6 +99,10 @@ def main():
     ## main loop
     is_counting = False
 
+    dia : int = 0
+    mes : int = 0
+    ano : int = 0
+    
     duracao : float = 0
     inicio : float = 0
     ultimo : float = time.time()
@@ -128,6 +129,12 @@ def main():
 
             case 'comecar':
                 inicio = time.time()
+
+                today = date.today()
+                dia = int(today.strftime('%d'))
+                mes = int(today.strftime('%m'))
+                ano = int(today.strftime('%Y'))
+
                 duracao = 0
                 ultimo = time.time()
                 is_counting = True
@@ -157,12 +164,11 @@ def main():
                 is_counting = not is_counting
 
             case 'parar':
-                today = date.today()
                 duracao += time.time() - ultimo
                 is_counting = False
 
-                values_to_save = (int(today.strftime('%d')), int(today.strftime('%m')), int(today.strftime('%Y')), inicio, duracao, tarefa)
-                cur.execute('INSERT INTO logs(dia, mes, ano, inicio, duracao, tarefa) VALUES(?, ?, ?, ?, ?, ?)', values_to_save)
+                cur.execute('INSERT INTO logs(dia, mes, ano, inicio, duracao, tarefa) VALUES(?, ?, ?, ?, ?, ?)', 
+                                             (dia, mes, ano, inicio, duracao, tarefa))
                 con.commit()
 
                 window.refresh()
