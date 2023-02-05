@@ -128,7 +128,13 @@ def main():
                 window.un_hide()
                 window.bring_to_front()
 
-            case 'Esconder Janela' | sg.WIN_CLOSE_ATTEMPTED_EVENT:
+            case 'Esconder Janela':
+                window.hide()
+                tray.show_icon()
+            
+            case sg.WIN_CLOSE_ATTEMPTED_EVENT:
+                if not is_counting:
+                    break
                 window.hide()
                 tray.show_icon()
             
