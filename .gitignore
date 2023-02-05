@@ -1,0 +1,5 @@
+*.pycustom
+*.code-workspace
+*.db
+/__pycache__
+/.vscode

@@ -68,6 +68,12 @@ def ver_registros(cur):
                         ['ID', 'Dia','Mês','Ano', 'Duração(min)', 'Tarefa'], num_rows=12)]]
     sg.Window('Ver registros', layout, icon=LOGO).read(close=True)
 
+def create_warning_window():
+    layout = [[sg.T('Tentou fechar a janela enquanto o timer estava em pausa. Deseja sair ou minimizar para o tray?')],
+              [sg.P, sg.B('Sair sem guardar', k='sair_sem_guardar'), sg.B('Guardar e sair', k='guardar_e_sair'), 
+               sg.B('Minimizar', k='minimizar_tray'), sg.P()]]
+    event, _ = sg.Window('Timer', layout, icon=LOGO).read(close=True)
+    return event
 
 def get_table(cur, name:str, items:str):
     cur.execute(f"SELECT {items} FROM {name}")
@@ -77,6 +83,10 @@ def get_tarefas(cur):
     tarefas = get_table(cur, 'tarefas', 'nome')
     tarefas = [x[0] for x in tarefas]
     return tarefas
+
+def save_logs(con, cur, data):
+    cur.execute('INSERT INTO logs(dia, mes, ano, inicio, duracao, tarefa) VALUES(?, ?, ?, ?, ?, ?)', data)
+    con.commit()
 
 ## event loop
 def main():
@@ -103,7 +113,8 @@ def main():
     tray = create_tray_icon(window)
     
     ## main loop
-    is_counting = False
+    is_running = False
+    is_paused = False
 
     dia : int = 0
     mes : int = 0
@@ -114,6 +125,8 @@ def main():
     ultimo : float = time.time()
     tarefa : str = ''
     
+    data_to_save = None
+
     while True:
         event, values = window.read(timeout=100, timeout_key='refresh')
 
@@ -121,8 +134,21 @@ def main():
             event = values[event]
 
         match event:
-            case 'Sair':
-                break
+            case 'Sair' | sg.WIN_CLOSE_ATTEMPTED_EVENT:
+                if not is_running and not is_paused:
+                    break
+                if is_paused:
+                    warning_event = create_warning_window()
+                    match warning_event:
+                        case 'sair_sem_guardar':
+                            break
+                        case 'guardar_e_sair':
+                            save_logs(con, cur, data_to_save)
+                            break
+                        case 'minimizar_tray':
+                            pass
+                window.hide()
+                tray.show_icon()
 
             case 'Mostrar janela' | sg.EVENT_SYSTEM_TRAY_ICON_DOUBLE_CLICKED:
                 window.un_hide()
@@ -132,14 +158,8 @@ def main():
                 window.hide()
                 tray.show_icon()
             
-            case sg.WIN_CLOSE_ATTEMPTED_EVENT:
-                if not is_counting:
-                    break
-                window.hide()
-                tray.show_icon()
-            
             case 'refresh':
-                if not is_counting:
+                if not is_running:
                     continue
 
                 duracao += time.time() - ultimo
@@ -161,7 +181,7 @@ def main():
 
                 duracao = 0
                 ultimo = time.time()
-                is_counting = True
+                is_running = True
 
                 window.refresh()
                 time.sleep(0.1)
@@ -175,25 +195,27 @@ def main():
             case 'pausar':
                 ultimo = time.time()
 
+                data_to_save = (dia, mes, ano, inicio, duracao, tarefa)
+
                 window.refresh()
                 time.sleep(0.1)
 
-                if is_counting:
+                if is_running:
                     window.Element('emoji').Update(EMOJI_PAUSE, text_color='red')
                     window.Element('pausar').Update("Continuar")
                 else:
                     window.Element('emoji').Update(EMOJI_RUNNING, text_color='green')
                     window.Element('pausar').Update("Pausar")
 
-                is_counting = not is_counting
+                is_running = not is_running
+                is_paused = not is_paused
 
             case 'parar':
                 duracao += time.time() - ultimo
-                is_counting = False
+                is_running = False
 
-                cur.execute('INSERT INTO logs(dia, mes, ano, inicio, duracao, tarefa) VALUES(?, ?, ?, ?, ?, ?)', 
-                                             (dia, mes, ano, inicio, duracao, tarefa))
-                con.commit()
+                data_to_save = (dia, mes, ano, inicio, duracao, tarefa)
+                save_logs(con, cur, data_to_save)
 
                 window.refresh()
                 time.sleep(0.1)
