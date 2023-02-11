@@ -105,7 +105,7 @@ def main():
 
     ## create window
     layout = create_layout(tarefas)
-    window = sg.Window('Timer', layout, icon=LOGO, finalize=True, resizable=True, enable_close_attempted_event=True)
+    window = sg.Window('Timer', layout, icon=LOGO, finalize=True, resizable=True, enable_close_attempted_event=True, size=(250,100))
     window.set_min_size((250,100))
     
     # window.bind('<FocusIn>', 'focus_in')
