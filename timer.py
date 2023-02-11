@@ -17,13 +17,10 @@ def create_tray_icon(window):
     menu = ['', ['Mostrar janela', 'Esconder Janela', "Sair"]]
     return SystemTray(menu, single_click_events=False, window=window, tooltip='timer', icon=LOGO)
 
-
-def create_menu_layout():
-    return [ ['Tarefas',['Ver tarefas', '!Editar tarefas', 'Adicionar tarefa']], 
-            ['Registos', ['Ver registros', '!Editar registos']] ]
-
 def create_layout(tarefas:list):
-    menu = [sg.Menu(create_menu_layout())]
+    menu_layout = [ ['Tarefas',['Ver tarefas', '!Editar tarefas', 'Adicionar tarefa']], 
+                    ['Registos', ['Ver registros', '!Editar registos']] ]
+    menu = [sg.Menu(menu_layout)]
     
     l1 = [sg.P(), sg.T(EMOJI_PAUSE, text_color='red', k='emoji'), sg.T('0:00:00', k='tempo'), sg.P()]
 
@@ -53,26 +50,23 @@ def adicionar_tarefa(con, cur):
         # adicionar_tarefa(con, cur)
         return
 
-    print('A ADICIONAR TAREFA')
-
     values_to_save = (values['nome'], values['descricao'], values['tags'])
     cur.execute('INSERT INTO tarefas(nome, descricao, tags) VALUES(?, ?, ?)', values_to_save)
     con.commit()
           
 def ver_tarefas(cur):
     layout = [[sg.Table(get_table(cur, 'tarefas', '*'), ['ID','Nome','Descrição', 'Tags'], num_rows=12)]]
-    sg.Window('Ver tarefas', layout, icon=LOGO).read(close=True)
+    sg.Window('Ver tarefas', layout, icon=LOGO).read(timeout=1)
 
 def ver_registros(cur):
     layout = [[sg.Table(get_table(cur, 'logs', 'id, dia, mes, ano, floor(duracao/60), tarefa'), 
                         ['ID', 'Dia','Mês','Ano', 'Duração(min)', 'Tarefa'], num_rows=12)]]
-    sg.Window('Ver registros', layout, icon=LOGO).read(close=True)
+    sg.Window('Ver registros', layout, icon=LOGO).read(timeout=1)
 
 def create_warning_window():
     layout = [[sg.T('Tentou fechar a janela enquanto o timer estava em pausa. Deseja sair ou minimizar para o tray?')],
-              [sg.P, sg.B('Sair sem guardar', k='sair_sem_guardar'), sg.B('Guardar e sair', k='guardar_e_sair'), 
-               sg.B('Minimizar', k='minimizar_tray'), sg.P()]]
-    event, _ = sg.Window('Timer', layout, icon=LOGO).read(close=True)
+              [sg.P(), sg.B('Sair sem guardar', k='sair_sem_guardar'), sg.B('Guardar e sair', k='guardar_e_sair'), sg.B('Minimizar', k='minimizar_tray'), sg.P()]]
+    event, _ = sg.Window('Timer', layout, icon=LOGO, modal=True).read(close=True)
     return event
 
 def get_table(cur, name:str, items:str):
@@ -87,6 +81,14 @@ def get_tarefas(cur):
 def save_logs(con, cur, data):
     cur.execute('INSERT INTO logs(dia, mes, ano, inicio, duracao, tarefa) VALUES(?, ?, ?, ?, ?, ?)', data)
     con.commit()
+
+def minimaze_to_tray(window, tray):
+    window.hide()
+    tray.show_icon()
+
+def show_from_tray(window, tray):
+    window.un_hide()
+    window.bring_to_front()
 
 ## event loop
 def main():
@@ -113,8 +115,8 @@ def main():
     tray = create_tray_icon(window)
     
     ## main loop
-    is_running = False
-    is_paused = False
+    started = False
+    paused = False
 
     dia : int = 0
     mes : int = 0
@@ -135,31 +137,27 @@ def main():
 
         match event:
             case 'Sair' | sg.WIN_CLOSE_ATTEMPTED_EVENT:
-                if not is_running and not is_paused:
+                if not started:
                     break
-                if is_paused:
-                    warning_event = create_warning_window()
-                    match warning_event:
-                        case 'sair_sem_guardar':
-                            break
-                        case 'guardar_e_sair':
-                            save_logs(con, cur, data_to_save)
-                            break
-                        case 'minimizar_tray':
-                            pass
-                window.hide()
-                tray.show_icon()
+            
+                warning_event = create_warning_window()
+                match warning_event:
+                    case 'sair_sem_guardar':
+                        break
+                    case 'guardar_e_sair':
+                        save_logs(con, cur, data_to_save)
+                        break
+                    case 'minimizar_tray':
+                        minimaze_to_tray(window, tray)
 
             case 'Mostrar janela' | sg.EVENT_SYSTEM_TRAY_ICON_DOUBLE_CLICKED:
-                window.un_hide()
-                window.bring_to_front()
+                show_from_tray(window, tray)
 
             case 'Esconder Janela':
-                window.hide()
-                tray.show_icon()
+                minimaze_to_tray(window, tray)
             
             case 'refresh':
-                if not is_running:
+                if not started or paused:
                     continue
 
                 duracao += time.time() - ultimo
@@ -181,7 +179,7 @@ def main():
 
                 duracao = 0
                 ultimo = time.time()
-                is_running = True
+                started = True
 
                 window.refresh()
                 time.sleep(0.1)
@@ -200,19 +198,19 @@ def main():
                 window.refresh()
                 time.sleep(0.1)
 
-                if is_running:
+                if not paused:
                     window.Element('emoji').Update(EMOJI_PAUSE, text_color='red')
                     window.Element('pausar').Update("Continuar")
                 else:
                     window.Element('emoji').Update(EMOJI_RUNNING, text_color='green')
                     window.Element('pausar').Update("Pausar")
 
-                is_running = not is_running
-                is_paused = not is_paused
+                paused = not paused
 
             case 'parar':
                 duracao += time.time() - ultimo
-                is_running = False
+                started = False
+                paused = False
 
                 data_to_save = (dia, mes, ano, inicio, duracao, tarefa)
                 save_logs(con, cur, data_to_save)
