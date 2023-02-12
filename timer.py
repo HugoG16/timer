@@ -13,7 +13,7 @@ from os.path import exists
 LOGO = "logo.ico"
 EMOJI_RUNNING = '▶️'
 EMOJI_PAUSE = '⏸️'
-DB_FILE_NAME = 'timer2.db'
+DB_FILE_NAME = 'timer.db'
 
 def create_tray_icon(window):
     menu = ['', ['Mostrar janela', 'Esconder Janela', "Sair"]]
