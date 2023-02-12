@@ -1,11 +1,11 @@
 import sqlite3 ## https://docs.python.org/3/library/sqlite3.html
 import PySimpleGUI as sg ## https://www.pysimplegui.org/en/latest/call%20reference
 from psgtray import SystemTray
-from datetime import date, timedelta
+from datetime import timedelta
 import time
 
 ## tables:          logs, tarefas
-## logs:            CREATE TABLE logs(id integer primary key autoincrement, dia integer, mes integer, ano integer, inicio real, duracao real, tarefa text);
+## logs:            CREATE TABLE logs(id integer primary key autoincrement, inicio real, duracao real, tarefa text);
 ## tarefas:         CREATE TABLE tarefas(id integer primary key autoincrement, nome text, descricao text, tags text);
 ## tags format:     '.tag1.tag2'
 
@@ -59,8 +59,13 @@ def ver_tarefas(cur):
     sg.Window('Ver tarefas', layout, icon=LOGO).read(timeout=1)
 
 def ver_registros(cur):
-    layout = [[sg.Table(get_table(cur, 'logs', 'id, dia, mes, ano, floor(duracao/60), tarefa'), 
-                        ['ID', 'Dia','Mês','Ano', 'Duração(min)', 'Tarefa'], num_rows=12)]]
+    table = get_table(cur, 'logs', 'id, inicio, duracao, tarefa')
+    for i, entry in enumerate(table):
+        data = time.strftime("%d/%m/%Y %H:%M", time.localtime(entry[1]))
+        duracao = round(entry[2]/60, 2)
+        table[i] = [entry[0], data, duracao, entry[3]]
+
+    layout = [[sg.Table(table, ['ID', 'Início', 'Duração(min)', 'Tarefa'], num_rows=12)]]
     sg.Window('Ver registros', layout, icon=LOGO).read(timeout=1)
 
 def create_warning_window():
@@ -79,7 +84,7 @@ def get_tarefas(cur):
     return tarefas
 
 def save_logs(con, cur, data):
-    cur.execute('INSERT INTO logs(dia, mes, ano, inicio, duracao, tarefa) VALUES(?, ?, ?, ?, ?, ?)', data)
+    cur.execute('INSERT INTO logs(inicio, duracao, tarefa) VALUES(?, ?, ?)', data)
     con.commit()
 
 def minimaze_to_tray(window, tray):
@@ -107,9 +112,6 @@ def main():
     layout = create_layout(tarefas)
     window = sg.Window('Timer', layout, icon=LOGO, finalize=True, resizable=True, enable_close_attempted_event=True, size=(250,100))
     window.set_min_size((250,100))
-    
-    # window.bind('<FocusIn>', 'focus_in')
-    # window.bind('<FocusOut>', 'focus_out')
 
     ## create tray icon
     tray = create_tray_icon(window)
@@ -117,10 +119,6 @@ def main():
     ## main loop
     started = False
     paused = False
-
-    dia : int = 0
-    mes : int = 0
-    ano : int = 0
     
     duracao : float = 0
     inicio : float = 0
@@ -171,14 +169,9 @@ def main():
 
             case 'comecar':
                 inicio = time.time()
-
-                today = date.today()
-                dia = int(today.strftime('%d'))
-                mes = int(today.strftime('%m'))
-                ano = int(today.strftime('%Y'))
-
-                duracao = 0
                 ultimo = time.time()
+                duracao = 0
+
                 started = True
 
                 window.refresh()
@@ -193,7 +186,7 @@ def main():
             case 'pausar':
                 ultimo = time.time()
 
-                data_to_save = (dia, mes, ano, inicio, duracao, tarefa)
+                data_to_save = (inicio, duracao, tarefa)
 
                 window.refresh()
                 time.sleep(0.1)
@@ -212,7 +205,7 @@ def main():
                 started = False
                 paused = False
 
-                data_to_save = (dia, mes, ano, inicio, duracao, tarefa)
+                data_to_save = (inicio, duracao, tarefa)
                 save_logs(con, cur, data_to_save)
 
                 window.refresh()
