@@ -3,6 +3,7 @@ import PySimpleGUI as sg ## https://www.pysimplegui.org/en/latest/call%20referen
 from psgtray import SystemTray
 from datetime import timedelta
 import time
+from os.path import exists
 
 ## tables:          logs, tarefas
 ## logs:            CREATE TABLE logs(id integer primary key autoincrement, inicio real, duracao real, tarefa text);
@@ -12,6 +13,7 @@ import time
 LOGO = "logo.ico"
 EMOJI_RUNNING = '▶️'
 EMOJI_PAUSE = '⏸️'
+DB_FILE_NAME = 'timer2.db'
 
 def create_tray_icon(window):
     menu = ['', ['Mostrar janela', 'Esconder Janela', "Sair"]]
@@ -24,12 +26,18 @@ def create_layout(tarefas:list):
     
     l1 = [sg.P(), sg.T(EMOJI_PAUSE, text_color='red', k='emoji'), sg.T('0:00:00', k='tempo'), sg.P()]
 
-    l2 = [sg.P(), sg.Combo(values=tarefas, enable_events=True, readonly=True, k='tarefa'), sg.P()]
+    l2 = [sg.P(), sg.Combo(values=tarefas, s=(16,None), enable_events=True, readonly=True, k='tarefa', tooltip='Escolha a tarefa.'), sg.P()]
 
     l3 = [sg.P(), sg.pin(sg.B('Começar', k='comecar', disabled=True)), sg.pin(sg.B('Terminar', k='parar', visible=False)), 
           sg.pin(sg.B('Pausar', k='pausar', visible=False)), sg.P()]
 
     return [menu, [sg.VPush()], l1, l2, l3, [sg.VPush()]]
+
+def create_window(tarefas):
+    layout = create_layout(tarefas)
+    window = sg.Window('Timer', layout, icon=LOGO, finalize=True, resizable=True, enable_close_attempted_event=True, size=(250,100))
+    window.set_min_size((250,100))
+    return window
 
 def adicionar_tarefa(con, cur):
     col1 = [[sg.T('Nome')], [sg.T('Descrição'),], [sg.T('Tags')]] 
@@ -95,12 +103,24 @@ def show_from_tray(window, tray):
     window.un_hide()
     window.bring_to_front()
 
-## event loop
-def main():
+def connect_db():
     ## connect to database 
-    con = sqlite3.connect('timer.db')
+    con = sqlite3.connect(DB_FILE_NAME)
     ## create cursor
     cur = con.cursor()
+    return con, cur
+
+def create_tables(cur):
+    cur.execute('CREATE TABLE logs(id integer primary key autoincrement, inicio real, duracao real, tarefa text)')
+    cur.execute('CREATE TABLE tarefas(id integer primary key autoincrement, nome text, descricao text, tags text)')
+
+## event loop
+def main():
+    if not exists(DB_FILE_NAME):
+        con, cur = connect_db()
+        create_tables(cur)
+    else:
+        con, cur = connect_db()
 
     ## get tarefas
     tarefas = get_tarefas(cur)
@@ -109,9 +129,7 @@ def main():
     sg.theme('BlueMono')
 
     ## create window
-    layout = create_layout(tarefas)
-    window = sg.Window('Timer', layout, icon=LOGO, finalize=True, resizable=True, enable_close_attempted_event=True, size=(250,100))
-    window.set_min_size((250,100))
+    window = create_window(tarefas)
 
     ## create tray icon
     tray = create_tray_icon(window)
@@ -231,4 +249,5 @@ def main():
                 
     tray.close()
     window.close()
+    con.close()
     exit(0)
