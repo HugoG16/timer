@@ -155,7 +155,11 @@ def main():
             case 'Sair' | sg.WIN_CLOSE_ATTEMPTED_EVENT:
                 if not started:
                     break
-            
+                
+                if not paused:
+                    minimaze_to_tray(window, tray)
+                    continue
+                
                 warning_event = create_warning_window()
                 match warning_event:
                     case 'sair_sem_guardar':
